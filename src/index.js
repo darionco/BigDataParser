@@ -241,10 +241,20 @@ function main() {
             end = new Date();
 
             let threads = 3;
+            let chunkSize = 10000;
             let selectColumn = dataManager.header.columnOrder[0];
             let selectOperation = 'contains';
             let filterValue = '';
-            let threadsString = () => `<div><span>Thread count: </span><input type="number" id="threadCount" min="1" max="8" value="${threads}"></div>`;
+            let threadsString = () => {
+                let thread = '';
+                thread += '<div>';
+                thread += '<span>Thread count:</span>';
+                thread += `<input type="number" id="threadCount" min="1" max="8" value="${threads}">`;
+                thread += '<span>Chunk size:</span>';
+                thread += `<input type="number" id="chunkSize" min="1" max="1000000" value="${chunkSize}">`;
+                thread += '</div>';
+                return thread;
+            };
             let base = '';
 
             base += `<div>Loaded in: ${end - start}ms</div>`;
@@ -253,13 +263,15 @@ function main() {
 
             const filterString = () => {
                 let filter = '';
-                filter += `<select id="selectColumn">`;
+                filter += '<span>Column:</span>';
+                filter += '<select id="selectColumn">';
                 dataManager.header.columnOrder.forEach(column => {
                     filter += `<option value="${column}" ${selectColumn === column ? 'selected' : ''}>${column}</option>`;
                 });
                 filter += '</select>';
 
-                filter += `<select id="selectOperation">`;
+                filter += '<span> Operator:</span>';
+                filter += '<select id="selectOperation">';
                 filter += `<option value="contains" ${selectOperation === 'contains' ? 'selected' : ''}>contains</option>`;
                 filter += `<option value="equal" ${selectOperation === 'equal' ? 'selected' : ''}>equal</option>`;
                 filter += `<option value="notEqual" ${selectOperation === 'notEqual' ? 'selected' : ''}>not equal</option>`;
@@ -267,6 +279,7 @@ function main() {
                 filter += `<option value="lessThan" ${selectOperation === 'lessThan' ? 'selected' : ''}>less than</option>`;
                 filter += '</select>';
 
+                filter += '<span> Value:</span>';
                 filter += `<input type="text" id="filterValue" value="${filterValue}">`;
                 filter += '<button id="runFilter"> search</button>';
 
@@ -289,6 +302,7 @@ function main() {
                     selectOperation = document.getElementById('selectOperation').value;
                     filterValue = document.getElementById('filterValue').value;
                     threads = document.getElementById('threadCount').value;
+                    chunkSize = document.getElementById('chunkSize').value;
 
                     if (filterValue.length) {
                         const columnType = dataManager.header.columns[selectColumn].type;
@@ -310,7 +324,7 @@ function main() {
                                 column: selectColumn,
                                 operation: selectOperation,
                                 value: filterValue,
-                            }, threads).then(rows => {
+                            }, chunkSize, threads).then(rows => {
                                 end = new Date();
                                 search += `<div>Completed in: ${end - start}ms</div>`;
                                 search += `<div>Rows processed: ${dataManager.mIndicesView[0]}</div>`;

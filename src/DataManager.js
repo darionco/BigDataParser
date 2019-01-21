@@ -35,7 +35,7 @@ export class DataManager {
         await this._loadWorkers();
     }
 
-    test(filter, threadCount = this.mWorkers.length) {
+    test(filter, chunkSize, threadCount = this.mWorkers.length) {
         const maxResults = 1000;
 
         Atomics.store(this.mIndicesView, 0, 0);
@@ -63,6 +63,7 @@ export class DataManager {
                     type: 'test',
                     filter,
                     result: result,
+                    chunk: chunkSize,
                 });
             }));
         }

@@ -24,19 +24,21 @@ class DataProcessor {
         this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters.getters);
     }
 
-    test(filter, result) {
+    test(chunkSize, filter, result) {
         const testFilter = this._getFilterFunction(filter);
         const row = {};
         const resultView = new Uint8Array(result);
-        for (let i = Atomics.add(this.mIndicesView, 0, 1);
+        for (let i = Atomics.add(this.mIndicesView, 0, chunkSize);
              i < this.mIndicesView[1] && Atomics.load(this.mIndicesView, 2) < this.mIndicesView[3];
-             i = Atomics.add(this.mIndicesView, 0, 1)) {
-            this.mRowReader(this.mMemoryView, i * this.mHeader.rowSize, row);
-            if (testFilter(row)) {
-                const resultIndex = Atomics.add(this.mIndicesView, 2, 1);
-                if (resultIndex < this.mIndicesView[3]) {
-                    for (let ii = 0; ii < this.mHeader.rowSize; ++ii) {
-                        resultView[resultIndex * this.mHeader.rowSize + ii] = this.mMemoryView.getUint8(i * this.mHeader.rowSize + ii);
+             i = Atomics.add(this.mIndicesView, 0, chunkSize)) {
+            for (let ii = 0; ii < chunkSize && i + ii < this.mIndicesView[1]; ++ii) {
+                this.mRowReader(this.mMemoryView, (i + ii) * this.mHeader.rowSize, row);
+                if (testFilter(row)) {
+                    const resultIndex = Atomics.add(this.mIndicesView, 2, 1);
+                    if (resultIndex < this.mIndicesView[3]) {
+                        for (let iii = 0; iii < this.mHeader.rowSize; ++iii) {
+                            resultView[resultIndex * this.mHeader.rowSize + iii] = this.mMemoryView.getUint8((i + ii) * this.mHeader.rowSize + iii);
+                        }
                     }
                 }
             }
@@ -48,20 +50,20 @@ class DataProcessor {
         switch (filter.operation) {
             case 'contains': {
                 const value = filter.value.toLowerCase();
-                return row => row[filter.column].toLowerCase().indexOf(value) !== -1;
+                return function filterContains(row) { return row[filter.column].toLowerCase().indexOf(value) !== -1; };
             }
 
             case 'equal':
-                return row => row[filter.column] === filter.value;
+                return function filterEquals(row) { return row[filter.column] === filter.value; };
 
             case 'notEqual':
-                return row => row[filter.column] !== filter.value;
+                return function filterNotEqual(row) { return row[filter.column] !== filter.value; };
 
             case 'moreThan':
-                return row => row[filter.column] > filter.value;
+                return function filterMoreThan(row) { return row[filter.column] > filter.value; };
 
             case 'lessThan':
-                return row => row[filter.column] < filter.value;
+                return function filterLessThan(row) { return row[filter.column] < filter.value; };
 
             default:
                 break;
@@ -72,12 +74,12 @@ class DataProcessor {
 
 let processor = null;
 
-global.onmessage = e => {
+global.onmessage = function dataWorkerOnMessage(e) {
     const message = e.data;
     if (message.type === 'init') {
         processor = new DataProcessor(message);
         global.postMessage('success');
     } else if (message.type === 'test') {
-        processor.test(message.filter, message.result);
+        processor.test(message.chunk, message.filter, message.result);
     }
 };
