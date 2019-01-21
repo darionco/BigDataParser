@@ -240,39 +240,55 @@ function main() {
         dataManager.init(fileInput.files[0]).then(() => {
             end = new Date();
 
+            let threads = 3;
+            let selectColumn = dataManager.header.columnOrder[0];
+            let selectOperation = 'contains';
+            let filterValue = '';
+            let threadsString = () => `<div><span>Thread count: </span><input type="number" id="threadCount" min="1" max="8" value="${threads}"></div>`;
             let base = '';
 
             base += `<div>Loaded in: ${end - start}ms</div>`;
             base += `<div>Columns: ${dataManager.header.columnOrder.length}</div>`;
             base += `<div>Rows: ${dataManager.header.count.toLocaleString()}</div>`;
 
-            let filter = '';
-            filter += '<select id="selectColumn">';
-            dataManager.header.columnOrder.forEach(column => {
-                filter += `<option value="${column}">${column}</option>`;
+            const filterString = () => {
+                let filter = '';
+                filter += `<select id="selectColumn">`;
+                dataManager.header.columnOrder.forEach(column => {
+                    filter += `<option value="${column}" ${selectColumn === column ? 'selected' : ''}>${column}</option>`;
+                });
+                filter += '</select>';
+
+                filter += `<select id="selectOperation">`;
+                filter += `<option value="contains" ${selectOperation === 'contains' ? 'selected' : ''}>contains</option>`;
+                filter += `<option value="equal" ${selectOperation === 'equal' ? 'selected' : ''}>equal</option>`;
+                filter += `<option value="notEqual" ${selectOperation === 'notEqual' ? 'selected' : ''}>not equal</option>`;
+                filter += `<option value="moreThan" ${selectOperation === 'moreThan' ? 'selected' : ''}>more than</option>`;
+                filter += `<option value="lessThan" ${selectOperation === 'lessThan' ? 'selected' : ''}>less than</option>`;
+                filter += '</select>';
+
+                filter += `<input type="text" id="filterValue" value="${filterValue}">`;
+                filter += '<button id="runFilter"> search</button>';
+
+                return filter;
+            };
+
+            document.body.innerHTML = base + threadsString() + filterString();
+
+            document.addEventListener('change', change => {
+                if (change.target && change.target.id === 'threadCount') {
+                    change.target.value = Math.max(Math.min(change.target.value, 8), 1);
+                }
             });
-            filter += '</select>';
-
-            filter += '<select id="selectOperation">';
-            filter += `<option value="contains">contains</option>`;
-            filter += `<option value="equal">equal</option>`;
-            filter += `<option value="notEqual">not equal</option>`;
-            filter += `<option value="moreThan">more than</option>`;
-            filter += `<option value="lessThan">less than</option>`;
-            filter += '</select>';
-
-            filter += '<input type="text" id="filterValue">';
-            filter += '<button id="runFilter"> search</button>';
-
-            document.body.innerHTML = base + filter;
 
             document.addEventListener('click', click => {
                 if (click.target && click.target.id === 'runFilter') {
                     click.preventDefault();
 
-                    const selectColumn = document.getElementById('selectColumn').value;
-                    const selectOperation = document.getElementById('selectOperation').value;
-                    let filterValue = document.getElementById('filterValue').value;
+                    selectColumn = document.getElementById('selectColumn').value;
+                    selectOperation = document.getElementById('selectOperation').value;
+                    filterValue = document.getElementById('filterValue').value;
+                    threads = document.getElementById('threadCount').value;
 
                     if (filterValue.length) {
                         const columnType = dataManager.header.columns[selectColumn].type;
@@ -286,7 +302,6 @@ function main() {
                         }
 
                         if (isValid) {
-                            const threads = 3;
                             let search = '';
                             search += `<div>Running filter with ${threads} threads...</div>`;
                             document.body.innerHTML = base + search;
@@ -320,7 +335,7 @@ function main() {
 
                                 table += '</table>';
 
-                                document.body.innerHTML = base + search + filter + table;
+                                document.body.innerHTML = base + search + threadsString() + filterString() + table;
                             });
                         }
                     }
