@@ -3,13 +3,6 @@
 import {DataTools} from './DataTools';
 import {ByteString} from './ByteString';
 
-const kIndexMap = {
-    loopIndex: 0,
-    loopTarget: 1,
-    resultCount: 2,
-    resultTarget: 3,
-};
-
 class DataProcessor {
     constructor(options) {
         this.mID = options.id;
@@ -30,8 +23,8 @@ class DataProcessor {
         const row = {};
         const resultView = new Uint8Array(result);
         for (let i = Atomics.add(this.mIndicesView, 0, chunkSize);
-             i < this.mIndicesView[1] && Atomics.load(this.mIndicesView, 2) < this.mIndicesView[3];
-             i = Atomics.add(this.mIndicesView, 0, chunkSize)) {
+            i < this.mIndicesView[1] && Atomics.load(this.mIndicesView, 2) < this.mIndicesView[3];
+            i = Atomics.add(this.mIndicesView, 0, chunkSize)) {
             for (let ii = 0; ii < chunkSize && i + ii < this.mIndicesView[1]; ++ii) {
                 this.mRowReader(this.mMemoryView, (i + ii) * this.mHeader.rowSize, row);
                 if (testFilter(row)) {
