@@ -1,6 +1,7 @@
 /* global Atomics */
 
 import {DataTools} from './DataTools';
+import {ByteString} from './ByteString';
 
 const kIndexMap = {
     loopIndex: 0,
@@ -49,11 +50,17 @@ class DataProcessor {
     _getFilterFunction(filter) {
         switch (filter.operation) {
             case 'contains': {
-                const value = filter.value.toLowerCase();
-                return function filterContains(row) { return row[filter.column].toLowerCase().indexOf(value) !== -1; };
+                // const value = filter.value.toLowerCase();
+                // return function filterContains(row) { return row[filter.column].toLowerCase().indexOf(value) !== -1; };
+                const value = ByteString.fromString(filter.value);
+                return function filterContains(row) { return row[filter.column].containsCase(value); };
             }
 
             case 'equal':
+                if (this.mHeader.columns[filter.column].type === 'string' || this.mHeader.columns[filter.column].type === 'date') {
+                    const value = ByteString.fromString(filter.value);
+                    return function filterEquals(row) { return row[filter.column].equalsCase(value); };
+                }
                 return function filterEquals(row) { return row[filter.column] === filter.value; };
 
             case 'notEqual':

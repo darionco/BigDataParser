@@ -1,5 +1,7 @@
+import {ByteString} from './ByteString';
+
 export class DataTools {
-    static generateColumnGetters(header) {
+    static generateColumnGetters(header, newStringInstances = false) {
         const getters = [];
         const keyMap = {};
         let rowOffset = 0;
@@ -8,18 +10,30 @@ export class DataTools {
             const column = header.columns[key];
             const off = rowOffset;
             if (column.type === 'string' || column.type === 'date') {
-                const decoder = new TextDecoder();
-                const arr = new Uint8Array(column.size);
-                let ii;
-                let nn;
-                keyMap[key] = getters.length;
-                getters.push(function getString(view, offset, target) {
-                    for (ii = 0, nn = column.size; ii < nn; ++ii) {
-                        arr[ii] = view.getUint8(offset + off + ii);
-                    }
-                    // target[key] = decoder.decode(arr);
-                    target[key] = String.fromCharCode.apply(null, arr);
-                });
+                if (newStringInstances) {
+                    getters.push(function getStringInstance(view, offset, target) {
+                        target[key] = ByteString.fromDataView(view, offset + off, offset + off + column.size);
+                    });
+                } else {
+                    const arr = new Uint8Array(column.size);
+                    const byteString = new ByteString(arr);
+                    getters.push(function getString(view, offset, target) {
+                        byteString.setDataView(view, offset + off, offset + off + column.size);
+                        target[key] = byteString;
+                    });
+                }
+                // // const decoder = new TextDecoder();
+                // const arr = new Uint8Array(column.size);
+                // let ii;
+                // let nn;
+                // keyMap[key] = getters.length;
+                // getters.push(function getString(view, offset, target) {
+                //     for (ii = 0, nn = column.size; ii < nn; ++ii) {
+                //         arr[ii] = view.getUint8(offset + off + ii);
+                //     }
+                //     // target[key] = decoder.decode(arr);
+                //     target[key] = String.fromCharCode.apply(null, arr);
+                // });
             } else {
                 keyMap[key] = getters.length;
                 switch (column.type) {

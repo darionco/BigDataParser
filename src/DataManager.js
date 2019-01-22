@@ -29,7 +29,7 @@ export class DataManager {
         this.mHeader = JSON.parse(decoder.decode(headerView));
         this.mDataOffset = headerSize + 4;
 
-        this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader);
+        this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader, true);
         this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters.getters);
 
         await this._loadWorkers();
