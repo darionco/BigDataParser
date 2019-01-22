@@ -55,6 +55,10 @@ class DataProcessor {
                 return function filterEquals(row) { return row[filter.column] === filter.value; };
 
             case 'notEqual':
+                if (this.mHeader.columns[filter.column].type === 'string' || this.mHeader.columns[filter.column].type === 'date') {
+                    const value = ByteString.fromString(filter.value);
+                    return function filterEquals(row) { return !row[filter.column].equalsCase(value); };
+                }
                 return function filterNotEqual(row) { return row[filter.column] !== filter.value; };
 
             case 'moreThan':
