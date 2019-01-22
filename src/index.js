@@ -330,26 +330,30 @@ function main() {
                                 search += `<div>Rows processed: ${dataManager.mIndicesView[0]}</div>`;
                                 search += `<div>Results found: ${dataManager.mIndicesView[2]}</div>`;
 
-                                let table = '<table>';
-                                table += '<thead><tr>';
-                                dataManager.header.columnOrder.forEach(column => {
-                                    table += `<th>${column}</th>`;
-                                });
-                                table += '</tr></thead>';
+                                document.body.innerHTML = base + search;
 
-                                table += '<tbody>';
-                                rows.forEach(row => {
-                                    table += '<tr>';
+                                setTimeout(() => {
+                                    let table = '<table>';
+                                    table += '<thead><tr>';
                                     dataManager.header.columnOrder.forEach(column => {
-                                        table += `<td>${row[column]}</td>`;
+                                        table += `<th>${column}</th>`;
                                     });
-                                    table += '</tr>';
-                                });
-                                table += '</tbody>';
+                                    table += '</tr></thead>';
 
-                                table += '</table>';
+                                    table += '<tbody>';
+                                    rows.forEach(row => {
+                                        table += '<tr>';
+                                        dataManager.header.columnOrder.forEach(column => {
+                                            table += `<td>${row[column]}</td>`;
+                                        });
+                                        table += '</tr>';
+                                    });
+                                    table += '</tbody>';
 
-                                document.body.innerHTML = base + search + threadsString() + filterString() + table;
+                                    table += '</table>';
+
+                                    document.body.innerHTML = base + search + threadsString() + filterString() + table;
+                                }, 100);
                             });
                         }
                     }
