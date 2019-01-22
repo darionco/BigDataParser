@@ -50,8 +50,6 @@ class DataProcessor {
     _getFilterFunction(filter) {
         switch (filter.operation) {
             case 'contains': {
-                // const value = filter.value.toLowerCase();
-                // return function filterContains(row) { return row[filter.column].toLowerCase().indexOf(value) !== -1; };
                 const value = ByteString.fromString(filter.value);
                 return function filterContains(row) { return row[filter.column].containsCase(value); };
             }

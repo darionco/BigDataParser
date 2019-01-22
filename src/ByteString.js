@@ -73,9 +73,6 @@ export class ByteString {
     }
 
     setDataViewUnsafe(value, start, end) {
-        // console.log(value);
-        // console.log(start);
-        // console.log(end);
         for (this.mLength = 0, this._n = end - start; this.mLength < this._n; ++this.mLength) {
             this.mData[this.mLength] = value.getUint8(this.mLength + start);
             if (this.mData[this.mLength] === 0) {

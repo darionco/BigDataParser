@@ -22,18 +22,6 @@ export class DataTools {
                         target[key] = byteString;
                     });
                 }
-                // // const decoder = new TextDecoder();
-                // const arr = new Uint8Array(column.size);
-                // let ii;
-                // let nn;
-                // keyMap[key] = getters.length;
-                // getters.push(function getString(view, offset, target) {
-                //     for (ii = 0, nn = column.size; ii < nn; ++ii) {
-                //         arr[ii] = view.getUint8(offset + off + ii);
-                //     }
-                //     // target[key] = decoder.decode(arr);
-                //     target[key] = String.fromCharCode.apply(null, arr);
-                // });
             } else {
                 keyMap[key] = getters.length;
                 switch (column.type) {
