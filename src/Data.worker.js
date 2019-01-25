@@ -15,18 +15,18 @@ class DataProcessor {
         this.mIndicesView = new Uint32Array(this.mSharedIndices);
 
         this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader);
-        this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters.getters);
     }
 
     test(chunkSize, filter, result) {
         const testFilter = this._getFilterFunction(filter);
+        const testColumn = this.mColumnGetters.keyMap[filter.column];
         const row = {};
         const resultView = new Uint8Array(result);
         for (let i = Atomics.add(this.mIndicesView, 0, chunkSize);
             i < this.mIndicesView[1] && Atomics.load(this.mIndicesView, 2) < this.mIndicesView[3];
             i = Atomics.add(this.mIndicesView, 0, chunkSize)) {
             for (let ii = 0; ii < chunkSize && i + ii < this.mIndicesView[1]; ++ii) {
-                this.mRowReader(this.mMemoryView, (i + ii) * this.mHeader.rowSize, row);
+                this.mColumnGetters.getters[testColumn](this.mMemoryView, (i + ii) * this.mHeader.rowSize, row);
                 if (testFilter(row)) {
                     const resultIndex = Atomics.add(this.mIndicesView, 2, 1);
                     if (resultIndex < this.mIndicesView[3]) {

@@ -9,6 +9,9 @@ export class DataTools {
             const key = header.columnOrder[i];
             const column = header.columns[key];
             const off = rowOffset;
+
+            keyMap[key] = getters.length;
+
             if (column.type === 'string' || column.type === 'date') {
                 if (newStringInstances) {
                     getters.push(function getStringInstance(view, offset, target) {
@@ -23,7 +26,6 @@ export class DataTools {
                     });
                 }
             } else {
-                keyMap[key] = getters.length;
                 switch (column.type) {
                     case 'Int8':
                         getters.push(function getInt8(view, offset, target) {
