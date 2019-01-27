@@ -202,6 +202,12 @@ export class ByteString {
         return false;
     }
 
+    copy(other) {
+        for (this._i = 0; this._i < this.mSize; ++this._i) {
+            this.mData[this.mOffset + this._i] = other.byteAt(this._i);
+        }
+    }
+
     _toLower(c) {
         return (c >= kCodeA && c <= kCodeZ) ? (c + 32) : c;
     }

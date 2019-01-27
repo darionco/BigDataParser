@@ -109,7 +109,7 @@ function main() {
                                 column: selectColumn,
                                 operation: selectOperation,
                                 value: filterValue,
-                            }, chunkSize, threads, aggregationType).then(rows => {
+                            }, chunkSize, threads, aggregationType).then(result => {
                                 end = new Date();
                                 search += `<div>Completed in: ${end - start}ms</div>`;
                                 search += `<div>Rows processed: ${dataManager.mIndicesView[0]}</div>`;
@@ -126,13 +126,14 @@ function main() {
                                     table += '</tr></thead>';
 
                                     table += '<tbody>';
-                                    rows.forEach(row => {
+                                    for (let i = 0; i < 200 && i < result.count; ++i) {
+                                        const row = result.getRow(i);
                                         table += '<tr>';
-                                        dataManager.header.columnOrder.forEach(column => {
+                                        dataManager.header.columnOrder.forEach(column => { // eslint-disable-line
                                             table += `<td>${row[column]}</td>`;
                                         });
                                         table += '</tr>';
-                                    });
+                                    }
                                     table += '</tbody>';
 
                                     table += '</table>';

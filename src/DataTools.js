@@ -108,7 +108,7 @@ export class DataTools {
                     resultIndex = Atomics.add(indicesView, 2, 1);
                     if (resultIndex < indicesView[3]) {
                         for (i = 0; i < rowSize; ++i) {
-                            result.setUint8(resultIndex * rowSize + i, dataView.getUint8(rowIndex + i));
+                            result.mDataView.setUint8(resultIndex * rowSize + i, dataView.getUint8(rowIndex + i));
                         }
                     }
                 };

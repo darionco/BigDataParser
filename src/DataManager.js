@@ -3,6 +3,7 @@
 import DataWorker from 'worker-loader!./Data.worker';
 import pako from 'pako';
 import {DataTools} from './DataTools';
+import {HashTable} from './dataStructures/HashTable';
 import pakoUtils from 'pako/lib/utils/common';
 
 /* patch flattenChunks to use SharredArrayBuffer for memory backing */
@@ -67,21 +68,21 @@ export class DataManager {
         this.mHeader = JSON.parse(String.fromCharCode.apply(null, headerView));
         this.mDataOffset = headerSize + 4;
 
-        this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader, true);
+        this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader);
         this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters);
 
         await this._loadWorkers();
     }
 
     test(filter, chunkSize, threadCount = this.mWorkers.length, aggregation = 'none') {
-        const maxResults = 1000;
+        const maxResults = 35000;
 
         Atomics.store(this.mIndicesView, 0, 0);
         Atomics.store(this.mIndicesView, 1, this.mHeader.count);
         Atomics.store(this.mIndicesView, 2, 0);
         Atomics.store(this.mIndicesView, 3, maxResults);
 
-        const result = new SharedArrayBuffer(maxResults * this.mHeader.rowSize);
+        const result = new HashTable(maxResults, 6, this.mHeader.rowSize);
 
         const promises = [];
         for (let i = 0, n = Math.min(threadCount, this.mWorkers.length); i < n; ++i) {
@@ -100,22 +101,23 @@ export class DataManager {
                 worker.postMessage({
                     type: 'test',
                     filter,
-                    result: result,
+                    result: result.serialize(),
                     chunk: chunkSize,
                     aggregation,
                 });
             }));
         }
         return Promise.all(promises).then(() => {
-            const ret = [];
-            const view = new DataView(result);
+            const view = new DataView(result.mData);
             const count = Math.min(this.mIndicesView[2], this.mIndicesView[3]);
-            for (let i = 0; i < count; ++i) {
-                const row = {};
-                this.mRowReader(view, i * this.mHeader.rowSize, row);
-                ret.push(row);
-            }
-            return ret;
+            const row = {};
+            return {
+                count,
+                getRow: index => {
+                    this.mRowReader(view, index * this.mHeader.rowSize, row);
+                    return row;
+                },
+            };
         });
     }
 
@@ -169,14 +171,10 @@ export class DataManager {
         // return memory;
     }
 
-    _handleWorkerMessage(message) {
-
-    }
-
     _readBytesFromChunk(chunk) {
         return new Promise(resolve => {
             const reader = new FileReader();
-            reader.addEventListener("loadend", () => {
+            reader.addEventListener('loadend', () => {
                 resolve(new Uint8Array(reader.result));
             });
             reader.readAsArrayBuffer(chunk);

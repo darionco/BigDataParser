@@ -2,6 +2,7 @@
 
 import {DataTools} from './DataTools';
 import {ByteString} from './dataStructures/ByteString';
+import {HashTable} from './dataStructures/HashTable';
 
 class DataProcessor {
     constructor(options) {
@@ -25,7 +26,6 @@ class DataProcessor {
         const aggregate = DataTools.generateAggregationFunction(aggregation);
         const dataView = this.mDataView;
         const indicesView = this.mIndicesView;
-        const resultView = new DataView(result);
         const rowSize = this.mHeader.rowSize;
         // const row = {};
         let rowIndex;
@@ -38,7 +38,7 @@ class DataProcessor {
             for (ii = 0; ii < chunkSize && i + ii < indicesView[1]; ++ii) {
                 rowIndex = (i + ii) * rowSize;
                 if (testFilter(columnGetters.getters[testColumn](dataView, rowIndex))) {
-                    aggregate(resultView, indicesView, dataView, rowIndex, rowSize);
+                    aggregate(result, indicesView, dataView, rowIndex, rowSize);
                 }
             }
         }
@@ -87,6 +87,6 @@ global.onmessage = function dataWorkerOnMessage(e) {
         processor = new DataProcessor(message);
         global.postMessage('success');
     } else if (message.type === 'test') {
-        processor.test(message.chunk, message.filter, message.result, message.aggregation);
+        processor.test(message.chunk, message.filter, HashTable.deserialize(message.result), message.aggregation);
     }
 };
