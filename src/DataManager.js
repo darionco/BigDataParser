@@ -73,7 +73,7 @@ export class DataManager {
         await this._loadWorkers();
     }
 
-    test(filter, chunkSize, threadCount = this.mWorkers.length) {
+    test(filter, chunkSize, threadCount = this.mWorkers.length, aggregation = 'none') {
         const maxResults = 1000;
 
         Atomics.store(this.mIndicesView, 0, 0);
@@ -102,6 +102,7 @@ export class DataManager {
                     filter,
                     result: result,
                     chunk: chunkSize,
+                    aggregation,
                 });
             }));
         }

@@ -109,7 +109,7 @@ function main() {
                                 column: selectColumn,
                                 operation: selectOperation,
                                 value: filterValue,
-                            }, chunkSize, threads).then(rows => {
+                            }, chunkSize, threads, aggregationType).then(rows => {
                                 end = new Date();
                                 search += `<div>Completed in: ${end - start}ms</div>`;
                                 search += `<div>Rows processed: ${dataManager.mIndicesView[0]}</div>`;

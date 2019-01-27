@@ -18,7 +18,7 @@ class DataProcessor {
         this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters);
     }
 
-    test(chunkSize, filter, result) {
+    test(chunkSize, filter, result, aggregation) {
         const columnGetters = this.mColumnGetters;
         const testFilter = this._getFilterFunction(filter);
         const testColumn = columnGetters.keyMap[filter.column];
@@ -107,6 +107,6 @@ global.onmessage = function dataWorkerOnMessage(e) {
         processor = new DataProcessor(message);
         global.postMessage('success');
     } else if (message.type === 'test') {
-        processor.test(message.chunk, message.filter, message.result);
+        processor.test(message.chunk, message.filter, message.result, message.aggregation);
     }
 };
