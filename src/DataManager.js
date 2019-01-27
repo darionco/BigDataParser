@@ -1,7 +1,38 @@
 /* global Atomics, SharedArrayBuffer */
 
 import DataWorker from 'worker-loader!./Data.worker';
+import pako from 'pako';
 import {DataTools} from './DataTools';
+import pakoUtils from 'pako/lib/utils/common';
+
+/* patch flattenChunks to use SharredArrayBuffer for memory backing */
+pakoUtils.flattenChunks = chunks => {
+    let i;
+    let l;
+    let len;
+    let pos;
+    let chunk;
+    let result;
+    let backing;
+
+    // calculate data length
+    len = 0;
+    for (i = 0, l = chunks.length; i < l; i++) {
+        len += chunks[i].length;
+    }
+
+    // join chunks
+    backing = new SharedArrayBuffer(len);
+    result = new Uint8Array(backing);
+    pos = 0;
+    for (i = 0, l = chunks.length; i < l; i++) {
+        chunk = chunks[i];
+        result.set(chunk, pos);
+        pos += chunk.length;
+    }
+
+    return result;
+};
 
 export class DataManager {
     constructor() {
@@ -23,14 +54,21 @@ export class DataManager {
 
         const view = new DataView(this.mSharedMemory);
         const headerSize = view.getUint32(0, true);
-        const headerView = new Uint8Array(headerSize);
-        const decoder = new TextDecoder();
-        headerView.set(new Uint8Array(this.mSharedMemory, 4, headerSize));
-        this.mHeader = JSON.parse(decoder.decode(headerView));
+
+        let nb;
+        for (nb = 0; nb < headerSize; ++nb) {
+            if (view.getUint8(3 + headerSize - nb) !== 0) {
+                break;
+            }
+        }
+
+        const headerView = new Uint8Array(this.mSharedMemory, 4, headerSize - nb);
+
+        this.mHeader = JSON.parse(String.fromCharCode.apply(null, headerView));
         this.mDataOffset = headerSize + 4;
 
         this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader, true);
-        this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters.getters);
+        this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters);
 
         await this._loadWorkers();
     }
@@ -111,21 +149,23 @@ export class DataManager {
     }
 
     async _loadFileIntoSharedMemory(file) {
-        const size = file.size;
-        const memory = new SharedArrayBuffer(size);
-        const view = new Uint8Array(memory);
-        const chunkSize = 100000000;
-
-        let offset = 0;
-        let chunk;
-        let data;
-        while(offset < size) {
-            chunk = file.slice(offset, Math.min(offset + chunkSize, size));
-            data = await this._readBytesFromChunk(chunk);
-            view.set(data, offset);
-            offset += chunkSize;
-        }
-        return memory;
+        const compressed = await this._readBytesFromChunk(file);
+        const result = pako.inflate(compressed);
+        return result.buffer;
+        // const memory = new ArrayBuffer(size);
+        // const view = new Uint8Array(memory);
+        //
+        //
+        // let offset = 0;
+        // let chunk;
+        // let data;
+        // while(offset < size) {
+        //     chunk = file.slice(offset, Math.min(offset + chunkSize, size));
+        //     data = await this._readBytesFromChunk(chunk);
+        //     view.set(data, offset);
+        //     offset += chunkSize;
+        // }
+        // return memory;
     }
 
     _handleWorkerMessage(message) {

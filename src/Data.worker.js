@@ -1,7 +1,7 @@
 /* global Atomics */
 
 import {DataTools} from './DataTools';
-import {ByteString} from './ByteString';
+import {ByteString} from './dataStructures/ByteString';
 
 class DataProcessor {
     constructor(options) {
@@ -11,61 +11,86 @@ class DataProcessor {
         this.mSharedIndices = options.indices;
         this.mHeader = options.header;
 
-        this.mMemoryView = new DataView(this.mSharedMemory, this.mDataOffset);
+        this.mDataView = new DataView(this.mSharedMemory, this.mDataOffset);
         this.mIndicesView = new Uint32Array(this.mSharedIndices);
 
         this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader);
+        this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters);
     }
 
     test(chunkSize, filter, result) {
+        const columnGetters = this.mColumnGetters;
         const testFilter = this._getFilterFunction(filter);
-        const testColumn = this.mColumnGetters.keyMap[filter.column];
-        const row = {};
-        const resultView = new Uint8Array(result);
-        for (let i = Atomics.add(this.mIndicesView, 0, chunkSize);
-            i < this.mIndicesView[1] && Atomics.load(this.mIndicesView, 2) < this.mIndicesView[3];
-            i = Atomics.add(this.mIndicesView, 0, chunkSize)) {
-            for (let ii = 0; ii < chunkSize && i + ii < this.mIndicesView[1]; ++ii) {
-                this.mColumnGetters.getters[testColumn](this.mMemoryView, (i + ii) * this.mHeader.rowSize, row);
-                if (testFilter(row)) {
-                    const resultIndex = Atomics.add(this.mIndicesView, 2, 1);
-                    if (resultIndex < this.mIndicesView[3]) {
-                        for (let iii = 0; iii < this.mHeader.rowSize; ++iii) {
-                            resultView[resultIndex * this.mHeader.rowSize + iii] = this.mMemoryView.getUint8((i + ii) * this.mHeader.rowSize + iii);
+        const testColumn = columnGetters.keyMap[filter.column];
+        const dataView = this.mDataView;
+        const indicesView = this.mIndicesView;
+        const resultView = new DataView(result);
+        const rowSize = this.mHeader.rowSize;
+        // const row = {};
+        let resultIndex;
+        let rowIndex;
+        let i;
+        let ii;
+        let iii;
+
+        for (i = Atomics.add(indicesView, 0, chunkSize);
+            i < indicesView[1]/* && Atomics.load(indicesView, 2) < indicesView[3]*/;
+            i = Atomics.add(indicesView, 0, chunkSize)) {
+            for (ii = 0; ii < chunkSize && i + ii < indicesView[1]; ++ii) {
+                rowIndex = (i + ii) * rowSize;
+                if (testFilter(columnGetters.getters[testColumn](dataView, rowIndex))) {
+                    resultIndex = Atomics.add(indicesView, 2, 1);
+                    if (resultIndex < indicesView[3]) {
+                        for (iii = 0; iii < rowSize; ++iii) {
+                            resultView.setUint8(resultIndex * rowSize + iii, dataView.getUint8(rowIndex + iii));
                         }
                     }
+                    // this.mRowReader(dataView, (i + ii) * rowSize, row);
+                    // this._aggregate(row, dataView, (i + ii) * rowSize, container, indicesView[3], info);
                 }
             }
         }
         global.postMessage('success');
     }
 
+    _aggregationNone() {
+
+    }
+
+    _aggregationByRoute() {
+
+    }
+
+    _aggregationWebGL() {
+
+    }
+
     _getFilterFunction(filter) {
         switch (filter.operation) {
             case 'contains': {
                 const value = ByteString.fromString(filter.value);
-                return function filterContains(row) { return row[filter.column].containsCase(value); };
+                return function filterContains(toTest) { return toTest.containsCase(value); };
             }
 
             case 'equal':
                 if (this.mHeader.columns[filter.column].type === 'string' || this.mHeader.columns[filter.column].type === 'date') {
                     const value = ByteString.fromString(filter.value);
-                    return function filterEquals(row) { return row[filter.column].equalsCase(value); };
+                    return function filterEquals(toTest) { return toTest.equalsCase(value); };
                 }
-                return function filterEquals(row) { return row[filter.column] === filter.value; };
+                return function filterEquals(toTest) { return toTest === filter.value; };
 
             case 'notEqual':
                 if (this.mHeader.columns[filter.column].type === 'string' || this.mHeader.columns[filter.column].type === 'date') {
                     const value = ByteString.fromString(filter.value);
-                    return function filterEquals(row) { return !row[filter.column].equalsCase(value); };
+                    return function filterEquals(toTest) { return !toTest.equalsCase(value); };
                 }
-                return function filterNotEqual(row) { return row[filter.column] !== filter.value; };
+                return function filterNotEqual(toTest) { return toTest !== filter.value; };
 
             case 'moreThan':
-                return function filterMoreThan(row) { return row[filter.column] > filter.value; };
+                return function filterMoreThan(toTest) { return toTest > filter.value; };
 
             case 'lessThan':
-                return function filterLessThan(row) { return row[filter.column] < filter.value; };
+                return function filterLessThan(toTest) { return toTest < filter.value; };
 
             default:
                 break;

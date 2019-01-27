@@ -1,4 +1,5 @@
 const fs = require('fs');
+const pako = require('pako');
 const path = require('path');
 const processCSV = require('./processCSV');
 const {TextEncoder} = require('util');
@@ -62,82 +63,97 @@ async function main() {
             'Origin_airport': {
                 type: 'string',
                 max: 0,
+                offset: 0,
             },
             'Destination_airport': {
                 type: 'string',
                 max: 0,
+                offset: 0,
             },
             'Origin_city': {
                 type: 'string',
                 max: 0,
+                offset: 0,
             },
             'Destination_city': {
                 type: 'string',
                 max: 0,
+                offset: 0,
             },
             'Passengers': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Seats': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Flights': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Distance': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Fly_date': {
                 type: 'date',
                 max: 0,
+                offset: 0,
             },
             'Origin_population': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Destination_population': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Org_airport_lat': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Org_airport_long': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Dest_airport_lat': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
             'Dest_airport_long': {
                 type: 'number',
                 isFloat: false,
                 min: Number.MAX_SAFE_INTEGER,
                 max: Number.MIN_SAFE_INTEGER,
+                offset: 0,
             },
         },
         countRaw: 0,
@@ -184,6 +200,7 @@ async function main() {
         count: meta.count,
         rowSize: 0,
     };
+
     keys.forEach(key => {
         if (meta.columns[key].type === 'number') {
             if (meta.columns[key].isFloat) {
@@ -216,10 +233,18 @@ async function main() {
             };
         }
 
+        finalMeta.columns[key].offset = finalMeta.rowSize;
+
         finalMeta.rowSize += finalMeta.columns[key].size;
     });
 
-    const header = encoder.encode(JSON.stringify(finalMeta));
+    const headerString = JSON.stringify(finalMeta);
+    const headerLength = headerString.length;
+    const header = new Uint8Array(headerLength);
+    for (let i = 0; i < headerString.length; ++i) {
+        header[i] = headerString.charCodeAt(i);
+    }
+
     const result = Buffer.alloc(finalMeta.rowSize * finalMeta.count + header.length + 4);
     const rowBuffer = Buffer.alloc(finalMeta.rowSize);
     let offset = 0;
@@ -262,6 +287,7 @@ async function main() {
             offset += finalMeta.rowSize;
         }
     });
+    const compressed = pako.deflate(result, { level: 9 });
     end = new Date();
     console.log(end - start);
 
@@ -273,7 +299,7 @@ async function main() {
         console.log('Created ' + output);
 
         output = path.resolve(__dirname, './data.bin');
-        fs.writeFile(output, result, err => {
+        fs.writeFile(output, compressed, err => {
             if (err) {
                 return console.log(err);
             }
