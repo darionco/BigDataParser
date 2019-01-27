@@ -1,3 +1,5 @@
+/* global Atomics */
+
 import {ByteString} from './dataStructures/ByteString';
 
 export class DataTools {
@@ -93,5 +95,27 @@ export class DataTools {
                 target[order[i]] = getters[i](view, offset);
             }
         };
+    }
+
+    static generateAggregationFunction(aggregation) {
+        switch (aggregation) {
+            case 'byRoute':
+            case 'WebGL':
+            case 'none': {
+                let resultIndex;
+                let i;
+                return (result, indicesView, dataView, rowIndex, rowSize) => {
+                    resultIndex = Atomics.add(indicesView, 2, 1);
+                    if (resultIndex < indicesView[3]) {
+                        for (i = 0; i < rowSize; ++i) {
+                            result.setUint8(resultIndex * rowSize + i, dataView.getUint8(rowIndex + i));
+                        }
+                    }
+                };
+            }
+
+            default:
+                return () => null;
+        }
     }
 }

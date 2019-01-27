@@ -22,16 +22,15 @@ class DataProcessor {
         const columnGetters = this.mColumnGetters;
         const testFilter = this._getFilterFunction(filter);
         const testColumn = columnGetters.keyMap[filter.column];
+        const aggregate = DataTools.generateAggregationFunction(aggregation);
         const dataView = this.mDataView;
         const indicesView = this.mIndicesView;
         const resultView = new DataView(result);
         const rowSize = this.mHeader.rowSize;
         // const row = {};
-        let resultIndex;
         let rowIndex;
         let i;
         let ii;
-        let iii;
 
         for (i = Atomics.add(indicesView, 0, chunkSize);
             i < indicesView[1]/* && Atomics.load(indicesView, 2) < indicesView[3]*/;
@@ -39,30 +38,11 @@ class DataProcessor {
             for (ii = 0; ii < chunkSize && i + ii < indicesView[1]; ++ii) {
                 rowIndex = (i + ii) * rowSize;
                 if (testFilter(columnGetters.getters[testColumn](dataView, rowIndex))) {
-                    resultIndex = Atomics.add(indicesView, 2, 1);
-                    if (resultIndex < indicesView[3]) {
-                        for (iii = 0; iii < rowSize; ++iii) {
-                            resultView.setUint8(resultIndex * rowSize + iii, dataView.getUint8(rowIndex + iii));
-                        }
-                    }
-                    // this.mRowReader(dataView, (i + ii) * rowSize, row);
-                    // this._aggregate(row, dataView, (i + ii) * rowSize, container, indicesView[3], info);
+                    aggregate(resultView, indicesView, dataView, rowIndex, rowSize);
                 }
             }
         }
         global.postMessage('success');
-    }
-
-    _aggregationNone() {
-
-    }
-
-    _aggregationByRoute() {
-
-    }
-
-    _aggregationWebGL() {
-
     }
 
     _getFilterFunction(filter) {
