@@ -28,7 +28,7 @@ class DataProcessor {
         const indicesView = this.mIndicesView;
         const rowSize = this.mHeader.rowSize;
         // const row = {};
-        let rowIndex;
+        let rowOffset;
         let i;
         let ii;
 
@@ -36,9 +36,9 @@ class DataProcessor {
             i < indicesView[1]/* && Atomics.load(indicesView, 2) < indicesView[3]*/;
             i = Atomics.add(indicesView, 0, chunkSize)) {
             for (ii = 0; ii < chunkSize && i + ii < indicesView[1]; ++ii) {
-                rowIndex = (i + ii) * rowSize;
-                if (testFilter(columnGetters.getters[testColumn](dataView, rowIndex))) {
-                    aggregate(result, indicesView, dataView, rowIndex, rowSize);
+                rowOffset = (i + ii) * rowSize;
+                if (testFilter(columnGetters.getters[testColumn](dataView, rowOffset))) {
+                    aggregate(result, indicesView, dataView, rowOffset, rowSize);
                 }
             }
         }

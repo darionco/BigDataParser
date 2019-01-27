@@ -99,18 +99,35 @@ export class DataTools {
 
     static generateAggregationFunction(aggregation) {
         switch (aggregation) {
-            case 'byRoute':
             case 'WebGL':
             case 'none': {
                 let resultIndex;
                 let i;
-                return (result, indicesView, dataView, rowIndex, rowSize) => {
+                return (result, indicesView, dataView, rowOffset, rowSize) => {
                     resultIndex = Atomics.add(indicesView, 2, 1);
                     if (resultIndex < indicesView[3]) {
                         for (i = 0; i < rowSize; ++i) {
-                            result.mDataView.setUint8(resultIndex * rowSize + i, dataView.getUint8(rowIndex + i));
+                            result.mDataView.setUint8(resultIndex * rowSize + i, dataView.getUint8(rowOffset + i));
                         }
                     }
+                };
+            }
+
+            case 'byRoute': {
+                const keyString = new ByteString(new Uint8Array(4));
+                let i;
+                return (result, indicesView, dataView, rowOffset, rowSize) => {
+                    keyString.setDataView(dataView, rowOffset, rowOffset + 6);
+                    result.addRecord(
+                        keyString,
+                        (view, offset) => {
+                            Atomics.add(indicesView, 2, 1);
+                            for (i = 0; i < rowSize; ++i) {
+                                view.setUint8(offset + i, dataView.getUint8(rowOffset + i));
+                            }
+                        },
+                        () => {},
+                    );
                 };
             }
 

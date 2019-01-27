@@ -76,14 +76,14 @@ export class HashTable {
             this.mData = new SharedArrayBuffer(this.mSize * this.mRowSize);
         }
 
-        this.mKeyString = ByteString.fromArrayBuffer(this.mState, this.mKeysOffset, this.mKeysOffset + this.mKeySize);
-
         this.mDataView = new DataView(this.mData);
         this.mStateView = new DataView(this.mState);
 
         this.mLengthView = new Uint32Array(this.mState, this.mLengthOffset, 1);
-        this.mIndexView = new Uint32Array(this.mState, this.mIndexOffset, this.mIndexMemorySize / 4);
-        this.mListsView = new Uint32Array(this.mState, this.mListsOffset, this.mListsMemorySize / 4);
+        this.mIndexView = new Int32Array(this.mState, this.mIndexOffset, this.mIndexMemorySize / kUint32Size);
+        this.mListsView = new Int32Array(this.mState, this.mListsOffset, this.mListsMemorySize / kUint32Size);
+
+        this.mKeyString = ByteString.fromArrayBuffer(this.mState, this.mKeysOffset, this.mKeysOffset + this.mKeySize);
     }
 
     serialize() {
@@ -103,7 +103,7 @@ export class HashTable {
         let listAddress = Atomics.compareExchange(this.mIndexView, index, kNilAddress, kLockAddress);
 
         if (listAddress === kNilAddress) {
-            this._appendNewRecord(key, index, append);
+            this._appendNewRecord(key, this.mIndexView, index, append);
         } else {
             if (listAddress === kLockAddress) {
                 Atomics.wait(this.mIndexView, index, kLockAddress);
@@ -111,17 +111,45 @@ export class HashTable {
             }
 
             if (listAddress !== kFullAddress) {
-                // modify
+                let running = true;
+                let nodeAddress = listAddress;
+                let nodeIndex = nodeAddress - this.mListsOffset;
+                let keyAddress;
+                while (running) {
+                    keyAddress = this.mListsView[nodeIndex];
+                    this.mKeyString.setDataView(this.mStateView, keyAddress, keyAddress + this.mKeySize);
+                    if (this.mKeyString.equals(key)) {
+                        // modify
+                        running = false;
+                    } else {
+                        nodeAddress = Atomics.compareExchange(this.mListsView, nodeIndex + 2, kNilAddress, kLockAddress);
+                        if (nodeAddress === kNilAddress) {
+                            this._appendNewRecord(key, this.mListsView, nodeIndex + 2, append);
+                            running = false;
+                        } else {
+                            if (nodeAddress === kLockAddress) {
+                                Atomics.wait(this.mListsView, nodeIndex + 2, kLockAddress);
+                                nodeAddress = Atomics.load(this.mListsView, nodeIndex + 2);
+                            }
+
+                            if (nodeAddress === kFullAddress) {
+                                running = false;
+                            } else {
+                                nodeIndex = nodeAddress - this.mListsOffset;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    _appendNewRecord(key, index, append) {
+    _appendNewRecord(key, view, index, append) {
         const entryIndex = Atomics.add(this.mLengthView, 0, 1);
         if (entryIndex >= this.mSize) {
             Atomics.sub(this.mLengthView, 0, 1);
-            Atomics.store(this.mIndexView, index, kFullAddress);
-            Atomics.notify(this.mIndexView, index);
+            Atomics.store(view, index, kFullAddress);
+            Atomics.notify(view, index);
             return;
         }
 
@@ -132,22 +160,23 @@ export class HashTable {
          * Uint32: Data memory address
          * Uint32: Next node index + memory offset or lock if being added
          */
+        const nodeIndex = entryIndex * (this.mNodeSize / kUint32Size);
         const keyAddress = this.mKeysOffset + this.mKeySize * entryIndex;
         const dataAddress = this.mRowSize * entryIndex;
 
-        this.mListsView[entryIndex] = keyAddress;
-        this.mListsView[entryIndex + 1] = dataAddress;
-        this.mListsView[entryIndex + 2] = 0;
+        this.mListsView[nodeIndex] = keyAddress;
+        this.mListsView[nodeIndex + 1] = dataAddress;
+        this.mListsView[nodeIndex + 2] = 0;
 
         /* append the key */
-        this.mKeyString.setDataView(this.mState, keyAddress, keyAddress + this.mKeySize);
+        this.mKeyString.setDataView(this.mStateView, keyAddress, keyAddress + this.mKeySize);
         this.mKeyString.copy(key);
 
         /* call the user provided function */
         append(this.mDataView, dataAddress);
 
         /* store the index and notify other threads */
-        Atomics.store(this.mIndexView, index, entryIndex + this.mListsOffset);
-        Atomics.notify(this.mIndexView, index);
+        Atomics.store(view, index, nodeIndex + this.mListsOffset);
+        Atomics.notify(view, index);
     }
 }
