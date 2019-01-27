@@ -17,18 +17,25 @@ function main() {
         dataManager.init(fileInput.files[0]).then(() => {
             end = new Date();
 
-            let threads = 3;
-            let chunkSize = 10000;
+            let threads = 1;
+            let chunkSize = 1;
             let selectColumn = dataManager.header.columnOrder[0];
             let selectOperation = 'contains';
+            let aggregationType = 'none';
             let filterValue = '';
             let threadsString = () => {
                 let thread = '';
                 thread += '<div>';
                 thread += '<span>Thread count:</span>';
                 thread += `<input type="number" id="threadCount" min="1" max="8" value="${threads}">`;
-                thread += '<span>Chunk size:</span>';
+                thread += '<span> Chunk size:</span>';
                 thread += `<input type="number" id="chunkSize" min="1" max="1000000" value="${chunkSize}">`;
+                thread += '<span> Aggregation:</span>';
+                thread += '<select id="aggregationType">';
+                thread += `<option value="none" ${aggregationType === 'none' ? 'selected' : ''}>none</option>`;
+                thread += `<option value="byRoute" ${aggregationType === 'byRoute' ? 'selected' : ''}>by route</option>`;
+                thread += `<option value="WebGL" ${aggregationType === 'WebGL' ? 'selected' : ''}>WebGL Graph</option>`;
+                thread += '</select>';
                 thread += '</div>';
                 return thread;
             };
@@ -80,6 +87,7 @@ function main() {
                     filterValue = document.getElementById('filterValue').value;
                     threads = document.getElementById('threadCount').value;
                     chunkSize = document.getElementById('chunkSize').value;
+                    aggregationType = document.getElementById('aggregationType').value;
 
                     if (filterValue.length) {
                         const columnType = dataManager.header.columns[selectColumn].type;
