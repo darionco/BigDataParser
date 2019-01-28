@@ -23,7 +23,7 @@ class DataProcessor {
         const columnGetters = this.mColumnGetters;
         const testFilter = this._getFilterFunction(filter);
         const testColumn = columnGetters.keyMap[filter.column];
-        const aggregate = DataTools.generateAggregationFunction(aggregation);
+        const aggregate = DataTools.generateAggregationFunction(this.mHeader, aggregation);
         const dataView = this.mDataView;
         const indicesView = this.mIndicesView;
         const rowSize = this.mHeader.rowSize;
@@ -31,6 +31,15 @@ class DataProcessor {
         let rowOffset;
         let i;
         let ii;
+
+        if (aggregation === 'WebGL') {
+            result.__edgeValues = {
+                minWeight: Number.MAX_SAFE_INTEGER,
+                maxWeight: Number.MIN_SAFE_INTEGER,
+                minLength: Number.MAX_SAFE_INTEGER,
+                maxLength: Number.MIN_SAFE_INTEGER,
+            };
+        }
 
         for (i = Atomics.add(indicesView, 0, chunkSize);
             i < indicesView[1]/* && Atomics.load(indicesView, 2) < indicesView[3]*/;
@@ -42,7 +51,10 @@ class DataProcessor {
                 }
             }
         }
-        global.postMessage('success');
+        global.postMessage({
+            type: 'success',
+            meta: result.__edgeValues,
+        });
     }
 
     _getFilterFunction(filter) {
@@ -85,7 +97,7 @@ global.onmessage = function dataWorkerOnMessage(e) {
     const message = e.data;
     if (message.type === 'init') {
         processor = new DataProcessor(message);
-        global.postMessage('success');
+        global.postMessage({ type: 'success' });
     } else if (message.type === 'test') {
         processor.test(message.chunk, message.filter, HashTable.deserialize(message.result), message.aggregation);
     }

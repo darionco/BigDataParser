@@ -97,13 +97,12 @@ export class DataTools {
         };
     }
 
-    static generateAggregationFunction(aggregation) {
+    static generateAggregationFunction(header, aggregation) {
         switch (aggregation) {
-            case 'WebGL':
             case 'none': {
                 let resultIndex;
                 let i;
-                return (result, indicesView, dataView, rowOffset, rowSize) => {
+                return function aggregateNone(result, indicesView, dataView, rowOffset, rowSize) {
                     resultIndex = Atomics.add(indicesView, 2, 1);
                     if (resultIndex < indicesView[3]) {
                         for (i = 0; i < rowSize; ++i) {
@@ -115,18 +114,80 @@ export class DataTools {
 
             case 'byRoute': {
                 const keyString = new ByteString(new Uint8Array(4));
+                const passengersOffset = header.columns.Passengers.offset;
+                const seatsOffset = header.columns.Seats.offset;
+                const flightsOffset = header.columns.Flights.offset;
+                const passengersIntOffset = passengersOffset / 4;
+                const seatsIntOffset = seatsOffset / 4;
+                const flightsIntOffset = flightsOffset / 4;
+                let intOffset;
                 let i;
-                return (result, indicesView, dataView, rowOffset, rowSize) => {
-                    keyString.setDataView(dataView, rowOffset, rowOffset + 6);
+                return function aggregateByRoute(result, indicesView, dataView, rowOffset, rowSize) {
+                    keyString.setDataView(dataView, rowOffset + rowSize - 6, rowOffset + rowSize);
                     result.addRecord(
                         keyString,
-                        (view, offset) => {
+                        function appendByRoute(view, offset) {
                             Atomics.add(indicesView, 2, 1);
+                            view.setUint32(offset, 1, true);
                             for (i = 0; i < rowSize; ++i) {
-                                view.setUint8(offset + i, dataView.getUint8(rowOffset + i));
+                                view.setUint8(4 + offset + i, dataView.getUint8(rowOffset + i));
                             }
                         },
-                        () => {},
+                        function modifyByRoute(numeric, offset) {
+                            intOffset = offset / 4;
+                            Atomics.add(numeric, intOffset, 1);
+                            Atomics.add(numeric, 1 + intOffset + passengersIntOffset, dataView.getUint32(rowOffset + passengersOffset, true));
+                            Atomics.add(numeric, 1 + intOffset + seatsIntOffset, dataView.getUint32(rowOffset + seatsOffset, true));
+                            Atomics.add(numeric, 1 + intOffset + flightsIntOffset, dataView.getUint32(rowOffset + flightsOffset, true));
+                        },
+                    );
+                };
+            }
+
+            case 'WebGL': {
+                const keyString = new ByteString(new Uint8Array(4));
+
+                const orgLngOffset = header.columns.Org_airport_long.offset;
+                const orgLatOffset = header.columns.Org_airport_lat.offset;
+                const dstLngOffset = header.columns.Dest_airport_long.offset;
+                const dstLatOffset = header.columns.Dest_airport_lat.offset;
+                const passenOffset = header.columns.Passengers.offset;
+                const distOffset = header.columns.Distance.offset;
+
+                let weight;
+                let length;
+
+                return function aggregateWebGL(result, indicesView, dataView, rowOffset, rowSize) {
+                    keyString.setDataView(dataView, rowOffset + rowSize - 6, rowOffset + rowSize);
+                    result.addRecord(
+                        keyString,
+                        function appendByRoute(view, offset) {
+                            Atomics.add(indicesView, 2, 1);
+
+                            view.setFloat32(offset, dataView.getFloat32(rowOffset + orgLngOffset, true), true);
+                            view.setFloat32(offset + 4, dataView.getFloat32(rowOffset + orgLatOffset, true), true);
+                            view.setFloat32(offset + 8, dataView.getFloat32(rowOffset + dstLngOffset, true), true);
+                            view.setFloat32(offset + 12, dataView.getFloat32(rowOffset + dstLatOffset, true), true);
+
+                            weight = dataView.getUint32(rowOffset + passenOffset, true);
+                            length = dataView.getUint32(rowOffset + distOffset, true);
+
+                            view.setUint32(offset + 16, weight, true);
+                            view.setUint32(offset + 20, length, true);
+
+                            result.__edgeValues.minWeight = Math.min(result.__edgeValues.minWeight, weight);
+                            result.__edgeValues.maxWeight = Math.max(result.__edgeValues.maxWeight, weight);
+                            result.__edgeValues.minLength = Math.min(result.__edgeValues.minLength, length);
+                            result.__edgeValues.maxLength = Math.max(result.__edgeValues.maxLength, length);
+                        },
+                        function modifyByRoute(numeric, offset) {
+                            weight = dataView.getUint32(rowOffset + passenOffset, true);
+
+                            weight += Atomics.add(numeric, (offset / 4) + 4, weight);
+
+                            result.__edgeValues.minWeight = Math.min(result.__edgeValues.minWeight, weight);
+                            result.__edgeValues.maxWeight = Math.max(result.__edgeValues.maxWeight, weight);
+                        }
                     );
                 };
             }

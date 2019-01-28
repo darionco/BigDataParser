@@ -6,6 +6,45 @@ import {DataTools} from './DataTools';
 import {HashTable} from './dataStructures/HashTable';
 import pakoUtils from 'pako/lib/utils/common';
 
+const kHeaderWebGL = {
+    superColumns: [
+        { name: 'aLocations', size: 16 },
+        { name: 'aWeight', size: 4 },
+        { name: 'aLength', size: 4 },
+    ],
+
+    typeColumns: [
+        { name: 'float32', size: 4 },
+        { name: 'float32', size: 4 },
+        { name: 'float32', size: 4 },
+        { name: 'float32', size: 4 },
+        { name: 'uint32', size: 4 },
+        { name: 'uint32', size: 4 },
+    ],
+
+    other: {
+        uMaxWeight: 0,
+        uMaxLength: 0,
+    },
+
+    columns: {},
+    columnOrder: [],
+    columnOrderOriginal: [],
+    count: 0,
+    rowSize: 24,
+};
+
+for (let i = 0; i < kHeaderWebGL.rowSize; ++i) {
+    const key = `Byte${i.toString().padStart(2, '0')}`;
+    kHeaderWebGL.columns[key] = {
+        type: 'Uint8',
+        size: 1,
+        offset: i,
+    };
+    kHeaderWebGL.columnOrder.push(key);
+    kHeaderWebGL.columnOrderOriginal.push(key);
+}
+
 /* patch flattenChunks to use SharredArrayBuffer for memory backing */
 pakoUtils.flattenChunks = chunks => {
     let i;
@@ -68,9 +107,6 @@ export class DataManager {
         this.mHeader = JSON.parse(String.fromCharCode.apply(null, headerView));
         this.mDataOffset = headerSize + 4;
 
-        this.mColumnGetters = DataTools.generateColumnGetters(this.mHeader);
-        this.mRowReader = DataTools.generateRowGetter(this.mColumnGetters);
-
         await this._loadWorkers();
     }
 
@@ -82,7 +118,15 @@ export class DataManager {
         Atomics.store(this.mIndicesView, 2, 0);
         Atomics.store(this.mIndicesView, 3, maxResults);
 
-        const result = new HashTable(maxResults, 6, this.mHeader.rowSize);
+        let rowSize;
+        if (aggregation === 'byRoute') {
+            rowSize = this.mHeader.rowSize + 4;
+        } else if (aggregation === 'WebGL') {
+            rowSize = kHeaderWebGL.rowSize;
+        } else {
+            rowSize = this.mHeader.rowSize;
+        }
+        const result = new HashTable(maxResults, 6, rowSize);
 
         const promises = [];
         for (let i = 0, n = Math.min(threadCount, this.mWorkers.length); i < n; ++i) {
@@ -90,9 +134,9 @@ export class DataManager {
                 const worker = this.mWorkers[i];
                 worker.onmessage = e => {
                     const message = e.data;
-                    if (message === 'success') {
+                    if (message.type === 'success') {
                         worker.onmessage = event => this._handleWorkerMessage(event.data);
-                        resolve();
+                        resolve(message.meta);
                     } else {
                         throw 'Worker failed to initialize!';
                     }
@@ -107,14 +151,61 @@ export class DataManager {
                 });
             }));
         }
-        return Promise.all(promises).then(() => {
+        return Promise.all(promises).then(metas => {
             const view = new DataView(result.mData);
             const count = Math.min(this.mIndicesView[2], this.mIndicesView[3]);
             const row = {};
+            const finalMeta = {
+                minWeight: Number.MAX_SAFE_INTEGER,
+                maxWeight: Number.MIN_SAFE_INTEGER,
+                minLength: Number.MAX_SAFE_INTEGER,
+                maxLength: Number.MIN_SAFE_INTEGER,
+            };
+
+            let header;
+            if (aggregation === 'byRoute') {
+                header = Object.assign({}, this.mHeader);
+                header.columns = Object.assign({}, header.columns);
+                header.columnOrderOriginal = header.columnOrderOriginal.slice();
+                header.columnOrder = header.columnOrder.slice();
+                header.columnOrder.forEach(column => {
+                    header.columns[column] = Object.assign({}, header.columns[column]);
+                    header.columns[column].offset += 4;
+                });
+
+                header.columns.Instances = {
+                    type: 'Uint32',
+                    size: 4,
+                    offset: 0,
+                };
+
+                header.columnOrderOriginal.splice(4, 0, 'Instances');
+                header.columnOrder.unshift('Instances');
+
+                header.rowSize += 4;
+            } else if (aggregation === 'WebGL') {
+                header = kHeaderWebGL;
+
+                metas.forEach(meta => {
+                    finalMeta.minLength = Math.min(finalMeta.minLength, meta.minLength);
+                    finalMeta.maxLength = Math.max(finalMeta.maxLength, meta.maxLength);
+                    finalMeta.minWeight = Math.min(finalMeta.minWeight, meta.minWeight);
+                    finalMeta.maxWeight = Math.max(finalMeta.maxWeight, meta.maxWeight);
+                });
+            } else {
+                header = this.mHeader;
+            }
+
+            const columnGetters = DataTools.generateColumnGetters(header);
+            const rowReader = DataTools.generateRowGetter(columnGetters);
+
             return {
+                header,
                 count,
+                view,
+                meta: finalMeta,
                 getRow: index => {
-                    this.mRowReader(view, index * this.mHeader.rowSize, row);
+                    rowReader(view, index * header.rowSize, row);
                     return row;
                 },
             };
@@ -129,7 +220,7 @@ export class DataManager {
                     const worker = new DataWorker();
                     worker.onmessage = e => {
                         const message = e.data;
-                        if (message === 'success') {
+                        if (message.type === 'success') {
                             worker.onmessage = event => this._handleWorkerMessage(event.data);
                             resolve();
                         } else {
@@ -179,5 +270,9 @@ export class DataManager {
             });
             reader.readAsArrayBuffer(chunk);
         });
+    }
+
+    _handleWorkerMessage(message) {
+        console.error(`Unknown worker message ${JSON.stringify(message)}`);
     }
 }

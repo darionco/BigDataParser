@@ -77,6 +77,7 @@ export class HashTable {
         }
 
         this.mDataView = new DataView(this.mData);
+        this.mDataNumeric = new Uint32Array(this.mData);
         this.mStateView = new DataView(this.mState);
 
         this.mLengthView = new Uint32Array(this.mState, this.mLengthOffset, 1);
@@ -119,7 +120,8 @@ export class HashTable {
                     keyAddress = this.mListsView[nodeIndex];
                     this.mKeyString.setDataView(this.mStateView, keyAddress, keyAddress + this.mKeySize);
                     if (this.mKeyString.equals(key)) {
-                        // modify
+                        /* call the user provided function */
+                        modify(this.mDataNumeric, this.mListsView[nodeIndex + 1]);
                         running = false;
                     } else {
                         nodeAddress = Atomics.compareExchange(this.mListsView, nodeIndex + 2, kNilAddress, kLockAddress);

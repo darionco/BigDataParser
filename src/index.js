@@ -19,7 +19,7 @@ function main() {
 
             let threads = 1;
             let chunkSize = 1;
-            let selectColumn = dataManager.header.columnOrder[0];
+            let selectColumn = dataManager.header.columnOrderOriginal[0];
             let selectOperation = 'contains';
             let aggregationType = 'none';
             let filterValue = '';
@@ -42,14 +42,14 @@ function main() {
             let base = '';
 
             base += `<div>Loaded in: ${end - start}ms</div>`;
-            base += `<div>Columns: ${dataManager.header.columnOrder.length}</div>`;
+            base += `<div>Columns: ${dataManager.header.columnOrderOriginal.length}</div>`;
             base += `<div>Rows: ${dataManager.header.count.toLocaleString()}</div>`;
 
             const filterString = () => {
                 let filter = '';
                 filter += '<span>Column:</span>';
                 filter += '<select id="selectColumn">';
-                dataManager.header.columnOrder.forEach(column => {
+                dataManager.header.columnOrderOriginal.forEach(column => {
                     filter += `<option value="${column}" ${selectColumn === column ? 'selected' : ''}>${column}</option>`;
                 });
                 filter += '</select>';
@@ -112,25 +112,72 @@ function main() {
                             }, chunkSize, threads, aggregationType).then(result => {
                                 end = new Date();
                                 search += `<div>Completed in: ${end - start}ms</div>`;
-                                search += `<div>Rows processed: ${dataManager.mIndicesView[0]}</div>`;
+                                search += `<div>Rows processed: ${Math.min(dataManager.mIndicesView[0], dataManager.mIndicesView[1])}</div>`;
                                 search += `<div>Results found: ${dataManager.mIndicesView[2]}</div>`;
 
                                 document.body.innerHTML = base + search;
 
                                 setTimeout(() => {
                                     let table = '<table>';
+
+                                    if (aggregationType === 'WebGL') {
+                                        table += '<thead><tr>';
+                                        table += '<th>uMinWeight</th>';
+                                        table += '<th>uMaxWeight</th>';
+                                        table += '<th>uMinLength</th>';
+                                        table += '<th>uMaxLength</th>';
+                                        table += '</tr></thead>';
+
+                                        table += '<tbody><tr>';
+                                        table += `<td>${result.meta.minWeight}</td>`;
+                                        table += `<td>${result.meta.maxWeight}</td>`;
+                                        table += `<td>${result.meta.minLength}</td>`;
+                                        table += `<td>${result.meta.maxLength}</td>`;
+                                        table += '</tr></tbody>';
+
+                                        table += '</table><table>';
+                                    }
+
                                     table += '<thead><tr>';
-                                    dataManager.header.columnOrder.forEach(column => {
-                                        table += `<th>${column}</th>`;
+                                    if (aggregationType === 'WebGL') {
+                                        result.header.superColumns.forEach(col => {
+                                            table += `<th colspan="${col.size}">${col.name}</th>`;
+                                        });
+                                        table += '</tr><tr>';
+                                        result.header.typeColumns.forEach(col => {
+                                            table += `<th colspan="${col.size}">${col.name}</th>`;
+                                        });
+                                        table += '</tr><tr>';
+                                    }
+                                    result.header.columnOrderOriginal.forEach(column => {
+                                        if (aggregationType !== 'byRoute' || column !== 'Fly_date') {
+                                            table += `<th>${column}</th>`;
+                                        }
                                     });
                                     table += '</tr></thead>';
 
                                     table += '<tbody>';
                                     for (let i = 0; i < 200 && i < result.count; ++i) {
+                                        if (aggregationType === 'WebGL') {
+                                            table += '<tr>';
+
+                                            table += `<td colspan="4">${result.view.getFloat32(i * result.header.rowSize, true)}</td>`;
+                                            table += `<td colspan="4">${result.view.getFloat32(i * result.header.rowSize + 4, true)}</td>`;
+                                            table += `<td colspan="4">${result.view.getFloat32(i * result.header.rowSize + 8, true)}</td>`;
+                                            table += `<td colspan="4">${result.view.getFloat32(i * result.header.rowSize + 12, true)}</td>`;
+
+                                            table += `<td colspan="4">${result.view.getUint32(i * result.header.rowSize + 16, true)}</td>`;
+                                            table += `<td colspan="4">${result.view.getUint32(i * result.header.rowSize + 20, true)}</td>`;
+
+                                            table += '</tr>';
+                                        }
+
                                         const row = result.getRow(i);
                                         table += '<tr>';
-                                        dataManager.header.columnOrder.forEach(column => { // eslint-disable-line
-                                            table += `<td>${row[column]}</td>`;
+                                        result.header.columnOrderOriginal.forEach(column => { // eslint-disable-line
+                                            if (aggregationType !== 'byRoute' || column !== 'Fly_date') {
+                                                table += `<td>${row[column]}</td>`;
+                                            }
                                         });
                                         table += '</tr>';
                                     }
@@ -139,7 +186,7 @@ function main() {
                                     table += '</table>';
 
                                     document.body.innerHTML = base + search + threadsString() + filterString() + table;
-                                }, 100);
+                                }, 10);
                             });
                         }
                     }
