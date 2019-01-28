@@ -10,14 +10,14 @@
         "build:prod": "cross-env NODE_ENV='production' webpack -p",
         "build:prod:browser": "cross-env NODE_ENV='production' TARGET='browser' webpack -p",
         "start": "cross-env TARGET='browser' webpack-dev-server --host 0.0.0.0 --port 8081 --content-base ./www --hot --disableHostCheck",
-        "watch": "cross-env TARGET='browser' webpack --watch --progress",
-        "generateCerts": "openssl genrsa 1024 > server/file.pem && openssl req -new -key server/file.pem -out server/csr.pem && openssl x509 -req -days 365 -in server/csr.pem -signkey server/file.pem -out server/file.crt"
+        "watch": "cross-env TARGET='browser' webpack --watch --progress"
     },
     "devDependencies": {
         "cross-env": "^5.2.0",
         "csv-parser": "^2.1.0",
         "eslint": "^5.12.1",
         "eslint-loader": "^2.1.1",
+        "npm-run-all": "^4.1.5",
         "webpack": "^4.28.4",
         "webpack-cli": "^3.2.1",
         "webpack-dev-server": "^3.1.14",
