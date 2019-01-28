@@ -2,22 +2,21 @@ const fs = require('fs');
 const pako = require('pako');
 const path = require('path');
 const processCSV = require('./processCSV');
-const {TextEncoder} = require('util');
 
 const intTypes = {
     signed: [
-        {
-            type: 'Int8',
-            size: 1,
-            min: -128,
-            max: 127,
-        },
-        {
-            type: 'Int16',
-            size: 2,
-            min: -32768,
-            max: 32767,
-        },
+        // {
+        //     type: 'Int8',
+        //     size: 1,
+        //     min: -128,
+        //     max: 127,
+        // },
+        // {
+        //     type: 'Int16',
+        //     size: 2,
+        //     min: -32768,
+        //     max: 32767,
+        // },
         {
             type: 'Int32',
             size: 4,
@@ -26,18 +25,18 @@ const intTypes = {
         },
     ],
     unsigned: [
-        {
-            type: 'Uint8',
-            size: 1,
-            min: 0,
-            max: 255,
-        },
-        {
-            type: 'Uint16',
-            size: 2,
-            min: 0,
-            max: 65535,
-        },
+        // {
+        //     type: 'Uint8',
+        //     size: 1,
+        //     min: 0,
+        //     max: 255,
+        // },
+        // {
+        //     type: 'Uint16',
+        //     size: 2,
+        //     min: 0,
+        //     max: 65535,
+        // },
         {
             type: 'Uint32',
             size: 4,
@@ -109,7 +108,7 @@ async function main() {
                 offset: 0,
             },
             'Fly_date': {
-                type: 'date',
+                type: 'string',
                 max: 0,
                 offset: 0,
             },
@@ -164,8 +163,32 @@ async function main() {
     let start;
     let end;
 
-    const keys = Object.keys(meta.columns);
-    const encoder = new TextEncoder();
+    const keysOriginal = Object.keys(meta.columns);
+    const keys = keysOriginal.slice().sort((a, b) => {
+        if (a === 'Origin_airport' || a === 'Destination_airport') {
+            if (b === 'Origin_airport' || b === 'Destination_airport') {
+                return 0;
+            }
+            return 1;
+        }
+
+        if (b === 'Origin_airport' || b === 'Destination_airport') {
+            if (a === 'Origin_airport' || a === 'Destination_airport') {
+                return 0;
+            }
+            return -1;
+        }
+
+        if (meta.columns[a].type === meta.columns[b].type) {
+            return 0;
+        }
+
+        if (meta.columns[a].type === 'string') {
+            return 1;
+        }
+
+        return -1;
+    });
 
     start = new Date();
     await processCSV('./Airports2.csv', null, data => {
@@ -181,8 +204,7 @@ async function main() {
                     meta.columns[key].max = Math.max(meta.columns[key].max, v);
                 }
             } else {
-                const s = encoder.encode(data[key]);
-                meta.columns[key].max = Math.max(meta.columns[key].max, s.length);
+                meta.columns[key].max = Math.max(meta.columns[key].max, data[key].length);
             }
         });
 
@@ -197,6 +219,7 @@ async function main() {
     const finalMeta = {
         columns: {},
         columnOrder: keys,
+        columnOrderOriginal: keysOriginal,
         count: meta.count,
         rowSize: 0,
     };
@@ -238,8 +261,10 @@ async function main() {
         finalMeta.rowSize += finalMeta.columns[key].size;
     });
 
+    finalMeta.rowSize = 4 * Math.floor(finalMeta.rowSize / 4) + 4 * Math.min(finalMeta.rowSize % 4, 1);
+
     const headerString = JSON.stringify(finalMeta);
-    const headerLength = headerString.length;
+    const headerLength = 4 * Math.floor(headerString.length / 4) + 4 * Math.min(headerString.length % 4, 1);
     const header = new Uint8Array(headerLength);
     for (let i = 0; i < headerString.length; ++i) {
         header[i] = headerString.charCodeAt(i);
@@ -272,9 +297,8 @@ async function main() {
                     rowOffset += finalMeta.columns[key].size;
                 }
             } else {
-                const s = encoder.encode(data[key]);
-                for (let i = 0, n = s.length; i < n; ++i) {
-                    rowBuffer.writeUInt8(s[i], rowOffset + i);
+                for (let i = 0, n = data[key].length; i < n; ++i) {
+                    rowBuffer.writeUInt8(data[key].charCodeAt(i), rowOffset + i);
                 }
                 rowOffset += finalMeta.columns[key].size;
             }
