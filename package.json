@@ -13,10 +13,12 @@
         "watch": "cross-env TARGET='browser' webpack --watch --progress"
     },
     "devDependencies": {
+        "cli-progress": "^2.1.1",
         "cross-env": "^5.2.0",
         "csv-parser": "^2.1.0",
         "eslint": "^5.12.1",
         "eslint-loader": "^2.1.1",
+        "inquirer": "^6.2.2",
         "npm-run-all": "^4.1.5",
         "webpack": "^4.28.4",
         "webpack-cli": "^3.2.1",
