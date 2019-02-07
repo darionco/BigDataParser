@@ -15,6 +15,29 @@ const funtionTable = {
     'Float32': 'writeFloatLE',
 };
 
+function getRowGetter(header, view, offset) {
+    return i => {
+        const ret = {};
+        header.order.forEach(column => {
+            if (header.columns[column].type === 'Float32') {
+                ret[column] = view.readFloatLE(offset + i * header.rowSize + header.columns[column].offset);
+            } else if (header.columns[column].type === 'Uint32') {
+                ret[column] = view.readUInt32LE(offset + i * header.rowSize + header.columns[column].offset);
+            } else if (header.columns[column].type === 'Int32') {
+                ret[column] = view.readInt32LE(offset + i * header.rowSize + header.columns[column].offset);
+            } else {
+                const sOff = offset + i * header.rowSize + header.columns[column].offset;
+                const size = view.readUInt8(sOff);
+                ret[column] = '';
+                for (let i = 0; i < size; ++i) {
+                    ret[column] += String.fromCharCode(view.readUInt8(sOff + i + 1));
+                }
+            }
+        });
+        return ret;
+    }
+}
+
 async function main(argv) {
     if (argv.length < 4) {
         if (argv.length < 3 || (argv[2] !== '-h' && argv[2] !== '--help')) {
@@ -153,33 +176,18 @@ async function main(argv) {
         rowSize += columns[column].size;
     });
 
-    const header = JSON.stringify({
-        columns,
-        order: columnOrder,
-        orderOriginal: meta.columnOrder,
-        count: rowCount,
-        rowSize,
-    });
-    const headerLength = 4 * Math.floor(header.length / 4) + 4 * Math.min(header.length % 4, 1);
-    const byteLength = rowSize * rowCount + headerLength + 4;
-    const byteBuffer = Buffer.alloc(byteLength);
-    let offset = 0;
 
-    byteBuffer.writeUInt32LE(header.length, offset);
-    offset += 4;
-
-    for (let i = 0, n = header.length; i < n; ++i) {
-        byteBuffer.writeUInt8(header.charCodeAt(i), offset + i);
-    }
-    offset += headerLength;
 
     progressBar.start(totalFileSize, 0, { task: 'Preparing beans' });
 
+    const rowsBuffer = Buffer.alloc(rowSize * rowCount);
     const rowBuffer = Buffer.alloc(rowSize);
+    let offset = 0;
     let add;
     let rowOffset;
     let i;
     let n;
+    rowCount = 0;
     await processCSV(input, null, (data, csvHeader, bytesRead) => {
         if (data) {
             add = true;
@@ -204,16 +212,37 @@ async function main(argv) {
             });
 
             if (add) {
-                rowBuffer.copy(byteBuffer, offset);
+                rowBuffer.copy(rowsBuffer, offset);
                 offset += rowSize;
+                ++rowCount;
             }
         }
         progressBar.update(bytesRead);
     });
     progressBar.stop();
 
+    // const rowGetter = getRowGetter(JSON.parse(header), byteBuffer, headerLength + 4);
+    // console.log(rowGetter(0));
+
+    const header = JSON.stringify({
+        columns,
+        order: columnOrder,
+        orderOriginal: meta.columnOrder,
+        count: rowCount,
+        rowSize,
+    });
+    const headerLength = 4 * Math.floor(header.length / 4) + 4 * Math.min(header.length % 4, 1);
+    const headerBuffer = Buffer.alloc(headerLength + 4);
+
+    headerBuffer.writeUInt32LE(headerLength, 0);
+
+    for (let i = 0, n = header.length; i < n; ++i) {
+        headerBuffer.writeUInt8(header.charCodeAt(i), 4 + i);
+    }
+
     // 16777216 = 16 MB
     const sizeOf16MB = 16777216;
+    const byteLength = rowSize * rowCount;
     const beanCount = Math.ceil(byteLength / sizeOf16MB);
     const beans = [];
     let totalBeanSize = 0;
@@ -222,11 +251,20 @@ async function main(argv) {
     offset = 0;
 
     progressBar.start(beanCount, 0, { task: 'Packaging beans' });
+    bean = {
+        length: headerLength + 4,
+        buffer: headerBuffer,
+    };
+    bean.compressed = pako.deflate(bean.buffer, { level: 9 });
+    bean.compressedLength = bean.compressed.length;
+    beans.push(bean);
+    totalBeanSize += bean.compressedLength;
+
     for (i = 0; i < beanCount; ++i) {
         end = Math.min(offset + sizeOf16MB, byteLength);
         bean = {
             length: end - offset,
-            buffer: byteBuffer.slice(offset, end),
+            buffer: rowsBuffer.slice(offset, end),
         };
         bean.compressed = pako.deflate(bean.buffer, { level: 9 });
         bean.compressedLength = bean.compressed.length;
@@ -248,9 +286,9 @@ async function main(argv) {
      */
     const beanHeaderSize = 8 + beans.length * 8;
     const beanHeader = new Buffer(beanHeaderSize);
-    beanHeader.writeUInt32LE(byteLength, 0);
-    beanHeader.writeUInt32LE(beanCount, 4);
-    for (i = 0; i < beanCount; ++i) {
+    beanHeader.writeUInt32LE(byteLength + headerLength + 4, 0);
+    beanHeader.writeUInt32LE(beans.length, 4);
+    for (i = 0; i < beans.length; ++i) {
         beanHeader.writeUInt32LE(beans[i].length, i * 8 + 8);
         beanHeader.writeUInt32LE(beans[i].compressedLength, i * 8 + 12);
     }
@@ -269,7 +307,7 @@ async function main(argv) {
         offset += beanHeaderSize;
         progressBar.update(offset);
 
-        for (i = 0; i < beanCount; ++i) {
+        for (i = 0; i < beans.length; ++i) {
             outputStream.write(beans[i].compressed);
             offset += beans[i].compressedLength;
             progressBar.update(offset);
