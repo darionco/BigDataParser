@@ -191,7 +191,11 @@ async function main() {
     });
 
     start = new Date();
-    await processCSV('./Airports2.csv', null, data => {
+    await processCSV(path.resolve(__dirname, '../files/Airports2.csv'), null, data => {
+        if (!data) {
+            return;
+        }
+
         let add = true;
         keys.forEach(key => {
             if (meta.columns[key].type === 'number') {
@@ -283,7 +287,11 @@ async function main() {
     offset += header.length;
 
     start = new Date();
-    await processCSV('./Airports2.csv', null, data => {
+    await processCSV(path.resolve(__dirname, '../files/Airports2.csv'), null, data => {
+        if (!data) {
+            return;
+        }
+
         let add = true;
         let rowOffset = 0;
         rowBuffer.fill(0);
